@@ -4,6 +4,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
+	"github.com/antonrufino/gochat/gochat-server/server"
 )
 
 func main() {
@@ -13,8 +15,16 @@ func main() {
 		return
 	}
 
-	fmt.Println("IP:", ip)
-	fmt.Println("Port:", port)
+	gochatServer := server.Server{ip, port}
+
+	quitChannel := make(chan bool)
+
+	go gochatServer.Listen(quitChannel)
+
+	select {
+	case <-quitChannel:
+		return
+	}
 }
 
 func parseFlags() (string, uint16, error) {
