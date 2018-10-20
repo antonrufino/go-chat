@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 )
@@ -19,15 +20,14 @@ func (server Server) Listen(quitChannel chan bool) {
 	} else {
 		fmt.Println("Server listening on", listener.Addr())
 
-		connChannel := make(chan net.Conn)
 		errorChannel := make(chan error)
+		messageChannel := make(chan string, 10)
 
-		go acceptThread(listener, connChannel, errorChannel)
+		go acceptThread(listener, messageChannel, errorChannel)
+		go messageHandlerThread(messageChannel)
 
 		for {
 			select {
-			case conn := <-connChannel:
-				fmt.Println("Connection from", conn.RemoteAddr())
 			case err := <-errorChannel:
 				fmt.Println("Error:", err)
 			case <-quitChannel:
@@ -40,14 +40,47 @@ func (server Server) Listen(quitChannel chan bool) {
 	}
 }
 
-func acceptThread(listener net.Listener, connChannel chan net.Conn, errorChannel chan error) {
+func acceptThread(listener net.Listener, messageChannel chan string, errorChannel chan error) {
 	for {
 		conn, err := listener.Accept()
 		if (err != nil) {
 			errorChannel <- err
-			return
+			continue
 		}
 
-		connChannel <- conn
+		AddToRoom("default", conn)
+
+		go recieveMessages(conn, messageChannel)
+	}
+}
+
+func recieveMessages(conn net.Conn, messageChannel chan string) {
+	fmt.Println("Reciever thread created for connection from", conn.RemoteAddr())
+	reader := bufio.NewReader(conn)
+	for {
+		msg, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Closing connection.")
+			conn.Close()
+			return
+		} else {
+			messageChannel <- msg
+		}
+	}
+}
+
+func messageHandlerThread(messageChannel <-chan string) {
+	fmt.Println("Message thread created")
+
+	for {
+		select {
+		case msg := <-messageChannel:
+			room, _ := GetRoom("default")
+
+			for _, conn := range room {
+				fmt.Println("Sending to", conn.RemoteAddr())
+				conn.Write([]byte(msg))
+			}
+		}
 	}
 }
