@@ -20,6 +20,7 @@ func main() {
 	conn, err := net.Dial("tcp4", fmt.Sprintf("%s:%d", *ip, uint16(*port)))
 	if (err != nil) {
 		fmt.Println(err)
+		return
 	}
 
 	conn.Close()
